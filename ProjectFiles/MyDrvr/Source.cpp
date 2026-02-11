@@ -92,13 +92,7 @@ BOOLEAN RemoveInfoByProcess(HANDLE ProcessId)
     RemoveEntryList(&info->entry);
 
     // Liberar memoria
-    ExFreePool(info);
-
-    // Si no se libero la memoria
-    if (info) {
-        PRINT("[-] Informacion no liberada");
-        return FALSE;
-    }
+    ExFreePoolWithTag(info, TAG_INJ);
 
     return TRUE;
 }
@@ -235,7 +229,7 @@ VOID DestroyLists(void)
 
         NextEntry = NextEntry->Blink; // Asignamos al siguiente elemento
 
-        ExFreePool(info); // Liberamos memoria
+        ExFreePoolWithTag(info, TAG_INJ); // Liberamos memoria
     }
 
     PRINT("[+] Listas de elementos eliminados");
@@ -347,6 +341,9 @@ void NotifyForAImageLoaded(PUNICODE_STRING ImageName, HANDLE ProcessId, PIMAGE_I
         return;
     }
 
+    // Imprimir Nombre de la imagen cargada 
+    PRINT("[.] PID: %d NombreImagen: %wZ", ProcessId,ImageName);
+
     // Ahora toca buscar la DLL correspondiente
     if (CanBeInjected(info)) {
 
@@ -369,6 +366,7 @@ void NotifyForAImageLoaded(PUNICODE_STRING ImageName, HANDLE ProcessId, PIMAGE_I
             }
 
             PRINT("[+] Direccion de la funcion LdrDLL obtenida");
+            PRINT("[+] Direccion:  0x%x", LdrLoadDllRoutineAddress);
             info->LdrLoadDllRoutineAddress = LdrLoadDllRoutineAddress;
         }
 
@@ -403,6 +401,9 @@ void NotifyForCreateAProcess(HANDLE ParentId, HANDLE ProcessId, BOOLEAN create)
     }
     else
     {
+
+        PRINT("[.] Proceso terminado: %d", ProcessId);
+
         if (RemoveInfoByProcess(ProcessId)) {
             PRINT("[+] Info removida correctamente");
         }
