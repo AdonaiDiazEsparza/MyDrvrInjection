@@ -222,6 +222,25 @@ PVOID RtlxFindExportedRoutineByName(PVOID DllBase, PANSI_STRING ExportName)
     return Function;
 }
 
+/*
+ * @brief Funcion para eliminar todos los nodos de la lista cuando se detenga o se elimine el driver
+ */
+VOID DestroyLists(void) 
+{
+    PLIST_ENTRY NextEntry = g_list_entry.Flink; // Apuntamos al primer elemento de la lista
+
+    while (NextEntry != &g_list_entry)
+    {
+        PINJECTION_INFO info = CONTAINING_RECORD(NextEntry, INJECTION_INFO, entry); // Obtenermos el elemento 
+
+        NextEntry = NextEntry->Blink; // Asignamos al siguiente elemento
+
+        ExFreePool(info); // Liberamos memoria
+    }
+
+    PRINT("[+] Listas de elementos eliminados");
+}
+
 // ========================================================================================================
 
 // Funcion para comparar un nombre corto con el nombre completo de la llamada a funcion
@@ -391,8 +410,8 @@ void NotifyForCreateAProcess(HANDLE ParentId, HANDLE ProcessId, BOOLEAN create)
 }
 
 
+// =========================================================================================================
 
-// Funcion de finalizado par el driver
 void Unload(PDRIVER_OBJECT DriverObject) {
     UNREFERENCED_PARAMETER(DriverObject);
 
@@ -409,12 +428,13 @@ void Unload(PDRIVER_OBJECT DriverObject) {
         PRINT("[-] ERROR REMOVIENDO LA RUTINA DE CREACION DE PROCESOS: 0x%x", status);
     }
 
+    DestroyLists(); // Destruimos todas las listas
+
     PRINT("[.] DRIVER UNLOADED");
 
 }
 
 extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath) {
-    NTSTATUS status = STATUS_SUCCESS;
 
     // Print logs
     PRINT("CARGANDO DRIVER");
@@ -422,7 +442,9 @@ extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING Reg
     UNREFERENCED_PARAMETER(DriverObject);
     UNREFERENCED_PARAMETER(RegistryPath);
 
-    status = PsSetLoadImageNotifyRoutine(NotifyForAImageLoaded);
+    InitilizeInfoList();
+
+    NTSTATUS status = PsSetLoadImageNotifyRoutine(NotifyForAImageLoaded);
 
     if (!NT_SUCCESS(status)) {
         PRINT("[-] ERROR 0x%x", status);
