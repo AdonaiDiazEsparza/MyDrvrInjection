@@ -93,7 +93,7 @@ BOOL RemoveInfoByProcess(HANDLE ProcessId)
     // Si retorna un puntero nulo
     if (!info)
     {
-        PRINT("[-] Informacion no conseguida proceso no existente");
+        PRINT("[-] Informacion no conseguida del proceso no existente");
         return FALSE;
     }
 
@@ -278,11 +278,16 @@ void NotifyForAImageLoaded(PUNICODE_STRING ImageName, HANDLE ProcessId, PIMAGE_I
 
             // Si retorna un valor Nulo estaremos mal
             if(!LdrLoadDllRoutineAddress){
-                
+                PRINT("[-] RUTINA NO OBTENIDA");
+                PRINT("[.] Removiendo informacion de este proceso");
+                if(RemoveInfoByProcess(ProcessId)){
+                    PRINT("[+] Informacion removida");
+                }
+                return;
             }
 
             PRINT("[+] Direccion de la funcion LdrDLL obtenida");
-            info->LdrLoadDllRoutineAddress = ;
+            info->LdrLoadDllRoutineAddress = LdrLoadDllRoutineAddress;
         }
 
         return;
@@ -317,7 +322,7 @@ void NotifyForCreateAProcess(HANDLE ParentId, HANDLE ProcessId, BOOL create)
     else
     {
         if(RemoveInfoByProcess(ProcessId)){
-            PRINT("Info removida correctamente");
+            PRINT("[+] Info removida correctamente");
         }
     }
 }
