@@ -608,18 +608,28 @@ void NotifyForAImageLoaded(PUNICODE_STRING ImageName, HANDLE ProcessId, PIMAGE_I
 		return;
 	}
 
-	// Ahora toca revisar si ya se puede inyectar la DLL
-	if (info->LdrLoadDllRoutineAddress)
-	{
-		// Configurar la variable para filtrar la DLL que buscamos
-		SET_UNICODE_STRING(DllHooked, DLL_HOOKED_PATH);
+	SET_UNICODE_STRING(dll_hooked , DLL_HOOKED_PATH);
 
-		// Revisar si es nuestra DLL que estamos buscando si la ejecutan
-		if (IsSuffixedUnicodeString(ImageName, &DllHooked, TRUE) && IsMappedByLdrLoadDll(&DllHooked))
-		{
-			// Una vez que encontramos la DLL procedemos a realizar la inyeccion
-			InjQueueApc(KernelMode, &InjNormalRoutine, info, NULL, NULL);
+	if (!info->isInjected && IsSuffixedUnicodeString(ImageName, &dll_hooked, TRUE) && info->LdrLoadDllRoutineAddress){
+
+
+		PRINT("[!] Intento de inyeccion a hola.dll");
+
+		KAPC_STATE* apc_state = (KAPC_STATE*)ExAllocatePool2(POOL_FLAG_NON_PAGED, sizeof(KAPC_STATE), 'gat');
+		
+		if (!apc_state) {
+			PRINT("[-] APC STATE no asignado correctamente");
+			RemoveInfoByProcess(ProcessId);
+			return;
 		}
+
+		KeStackAttachProcess(process, apc_state);
+
+		InjQueueApc(KernelMode, &InjNormalRoutine, info, NULL, NULL);
+
+		KeUnstackDetachProcess(apc_state);
+
+		info->isInjected = TRUE;
 	}
 }
 
@@ -673,14 +683,14 @@ void Unload(PDRIVER_OBJECT DriverObject)
 {
 	UNREFERENCED_PARAMETER(DriverObject);
 
-	NTSTATUS status = PsRemoveLoadImageNotifyRoutine(NotifyForAImageLoaded);
+	NTSTATUS status = PsRemoveLoadImageNotifyRoutine(RoutineImageLoad);
 
 	if (!NT_SUCCESS(status))
 	{
 		PRINT("[-] ERROR REMOVIENDO RUTINA DE CARGA DE DLL: 0x%x", status);
 	}
 
-	status = PsSetCreateProcessNotifyRoutine(NotifyForCreateAProcess, TRUE);
+	status = PsSetCreateProcessNotifyRoutine(RoutineProcessCreated, TRUE);
 
 	if (!NT_SUCCESS(status))
 	{
@@ -703,7 +713,7 @@ extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING Reg
 
 	InitilizeInfoList();
 
-	NTSTATUS status = PsSetLoadImageNotifyRoutine(NotifyForAImageLoaded);
+	NTSTATUS status = PsSetLoadImageNotifyRoutine(RoutineImageLoad);
 
 	if (!NT_SUCCESS(status))
 	{
@@ -711,11 +721,11 @@ extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING Reg
 		return status;
 	}
 
-	status = PsSetCreateProcessNotifyRoutine(NotifyForCreateAProcess, FALSE);
+	status = PsSetCreateProcessNotifyRoutine(RoutineProcessCreated, FALSE);
 
 	if (!NT_SUCCESS(status))
 	{
-		PsRemoveLoadImageNotifyRoutine(NotifyForAImageLoaded);
+		PsRemoveLoadImageNotifyRoutine(RoutineImageLoad);
 		PRINT("[-] ERROR 0x%x", status);
 
 		return status;
