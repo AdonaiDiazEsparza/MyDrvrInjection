@@ -14,6 +14,7 @@
 #pragma comment(lib, "detours.lib")
 #pragma comment(lib, "Advapi32.lib")
 
+
 /* Donde vamos a poner los logs */
 const char* LogFilePath = "C:\\test\\log.txt";
 
@@ -23,13 +24,27 @@ typedef int (WINAPI* anyfun_t)(int, int);
 // Configuramos nuestra funcion como Nula
 anyfun_t pSum = NULL;
 
+// ========================================================================
+
+// Funcion para escribir Logs
+void WriteLogFile(char* Data);
+
+// ========================================================================
+
 // Added for the Sum
-int WINAPI hookSuma(int a, int b) {
-    return pSum(a, b) + 100;
+int WINAPI hookSuma(int a, int b)
+{
+    char EventData[512];
+
+    sprintf_s(EventData, "[!] Se realizo una suma: %d + %d, se le agregan 100 unidades\n", a, b);
+
+    WriteLogFile(EventData);
+        return pSum(a, b) + 100;
 }
 
 /* Funcion para escribir logs en un archivo */
-void WriteLogFile(char* Data) {
+void WriteLogFile(char* Data)
+{
 
     FILE* f = NULL;
     fopen_s(&f, LogFilePath, "a");
