@@ -7,8 +7,11 @@
 
 #define DRIVER_PREFIX "=> DRIVER_TEST: " // Prefix for the logs
 
+// Nombre de la DLL para filtrar
+#define DLL_HOOKED_PATH L"\\hola.dll"
+
 // Direcciones de las DLL a inyectar, dll para un proceso nativo o para un proceso de 32bit en uno de 64
-#define DLL_PATH_NATIVE L"PATH"
+#define DLL_PATH_NATIVE L"C:\\test\\edrHook.dll"
 #define DLL_PATH_WOW64 L""
 
 // Rutas de NTDLL en un proceso nativo o proceso de 32bit en uno de 64
