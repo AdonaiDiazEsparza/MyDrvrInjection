@@ -140,6 +140,7 @@ void InjNormalRoutine(PVOID NormalContext, PVOID SystemArgument1, PVOID SystemAr
 	UNREFERENCED_PARAMETER(info);
 
 	// Aqui se realiza la otra funcion
+	Injection(info);
 }
 
 NTSTATUS Injection(PINJECTION_INFO info)
@@ -613,6 +614,8 @@ void NotifyForAImageLoaded(PUNICODE_STRING ImageName, HANDLE ProcessId, PIMAGE_I
 		// Revisar si es nuestra DLL que estamos buscando si la ejecutan
 		if (IsSuffixedUnicodeString(ImageName, &DllHooked, TRUE) && IsMappedByLdrLoadDll(&DllHooked))
 		{
+			// Una vez que encontramos la DLL procedemos a realizar la inyeccion
+			InjQueueApc(KernelMode, &InjNormalRoutine, info, NULL, NULL);
 		}
 	}
 }
