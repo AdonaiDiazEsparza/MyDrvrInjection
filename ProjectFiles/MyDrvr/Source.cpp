@@ -57,7 +57,25 @@ NTSTATUS InjQueueApc(KPROCESSOR_MODE ApcMode, PKNORMAL_ROUTINE NormalRoutine, PV
 
 void InjNormalRoutine(PVOID NormalContext, PVOID SystemArgument1, PVOID SystemArgument2);
 
-// =====================================================================================
+void InjNormalRoutine(PVOID NormalContext, PVOID SystemArgument1, PVOID SystemArgument2);
+
+NTSTATUS Injection(PINJECTION_INFO info);
+
+NTSTATUS InjectOnSection(PINJECTION_INFO info, HANDLE SectionHandle, SIZE_T SectionSize);
+
+void InjKernelRoutine(PKAPC Apc, PKNORMAL_ROUTINE* NormalRoutine, PVOID* NormalContext, PVOID* SystemArgument1, PVOID* SystemArgument2);
+
+void NotifyForCreateAProcess(HANDLE ParentId, HANDLE ProcessId, BOOLEAN create);
+
+void NotifyForAImageLoaded(PUNICODE_STRING ImageName, HANDLE ProcessId, PIMAGE_INFO ImageInfo);
+
+// =======================================================================================
+
+PLOAD_IMAGE_NOTIFY_ROUTINE RoutineImageLoad = (PLOAD_IMAGE_NOTIFY_ROUTINE) NotifyForAImageLoaded;
+
+PCREATE_PROCESS_NOTIFY_ROUTINE RoutineProcessCreated = (PCREATE_PROCESS_NOTIFY_ROUTINE) NotifyForCreateAProcess;
+
+// =======================================================================================
 
 /**
  * @brief Es la funcion a ejecutar en modo kernel
@@ -112,21 +130,6 @@ NTSTATUS InjQueueApc(KPROCESSOR_MODE ApcMode, PKNORMAL_ROUTINE NormalRoutine, PV
 
 	return STATUS_SUCCESS;
 }
-
-/**
- *
- */
-void InjNormalRoutine(PVOID NormalContext, PVOID SystemArgument1, PVOID SystemArgument2);
-
-/**
- *
- */
-NTSTATUS Injection(PINJECTION_INFO info);
-
-/**
- *
- */
-NTSTATUS InjectOnSection(PINJECTION_INFO info, HANDLE SectionHandle, SIZE_T SectionSize);
 
 // =======================================================================================
 
@@ -656,6 +659,13 @@ void NotifyForCreateAProcess(HANDLE ParentId, HANDLE ProcessId, BOOLEAN create)
 		}
 	}
 }
+
+
+// =========================================================================================================
+
+/*
+	PROXIMAMENTE AGREGARE UNA FUNCION PARA LAS RUTINAS
+*/
 
 // =========================================================================================================
 
