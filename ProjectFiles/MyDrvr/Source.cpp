@@ -10,63 +10,27 @@ LIST_ENTRY g_list_entry; // Esta variable contiene todos los nodos de informacio
 
 ANSI_STRING LdrLoadDLLRoutineName = RTL_CONSTANT_STRING("LdrLoadDll"); // Funcion que buscamos en NTDLL para poder inyectar nuestra DLL
 
-UNICODE_STRING DllToInject = RTL_CONSTANT_STRING(DLL_PATH_NATIVE)
+UNICODE_STRING DllToInject = RTL_CONSTANT_STRING(DLL_PATH_NATIVE);
 
-	// =====================================================================================
+// =====================================================================================
 
-	/**
-	 * Shellcodes
-	 */
+/**
+ * Shellcodes
+ */
 
-	UCHAR FunctionX64[] = {
-		//
-		0x48,
-		0x83,
-		0xec,
-		0x38, // sub    rsp,0x38
-		0x48,
-		0x89,
-		0xc8, // mov    rax,rcx
-		0x66,
-		0x44,
-		0x89,
-		0x44,
-		0x24,
-		0x20, // mov    [rsp+0x20],r8w
-		0x66,
-		0x44,
-		0x89,
-		0x44,
-		0x24,
-		0x22, // mov    [rsp+0x22],r8w
-		0x4c,
-		0x8d,
-		0x4c,
-		0x24,
-		0x40, // lea    r9,[rsp+0x40]
-		0x48,
-		0x89,
-		0x54,
-		0x24,
-		0x28, // mov    [rsp+0x28],rdx
-		0x4c,
-		0x8d,
-		0x44,
-		0x24,
-		0x20, // lea    r8,[rsp+0x20]
-		0x31,
-		0xd2, // xor    edx,edx
-		0x31,
-		0xc9, // xor    ecx,ecx
-		0xff,
-		0xd0, // call   rax
-		0x48,
-		0x83,
-		0xc4,
-		0x38, // add    rsp,0x38
-		0xc2,
-		0x00,
-		0x00, // ret    0x0
+UCHAR FunctionX64[] = {
+0x48, 0x83, 0xec, 0x38, 				// sub    rsp,0x38
+0x48, 0x89, 0xc8, 						// mov    rax,rcx
+0x66, 0x44, 0x89, 0x44, 0x24, 0x20, 	// mov    [rsp+0x20],r8w
+0x66, 0x44, 0x89, 0x44, 0x24, 0x22, 	// mov    [rsp+0x22],r8w
+0x4c, 0x8d, 0x4c, 0x24, 0x40,	 		// lea    r9,[rsp+0x40]
+0x48, 0x89, 0x54, 0x24, 0x28, 			// mov    [rsp+0x28],rdx
+0x4c, 0x8d, 0x44, 0x24, 0x20, 			// lea    r8,[rsp+0x20]
+0x31, 0xd2, 							// xor    edx,edx
+0x31, 0xc9, 							// xor    ecx,ecx
+0xff, 0xd0, 							// call   rax
+0x48, 0x83, 0xc4, 0x38,			 		// add    rsp,0x38
+0xc2, 0x00, 0x00, 						// ret    0x0
 };
 
 SIZE_T Functionx64_lenght = sizeof(FunctionX64);
@@ -98,14 +62,14 @@ void InjNormalRoutine(PVOID NormalContext, PVOID SystemArgument1, PVOID SystemAr
 /**
  * @brief Es la funcion a ejecutar en modo kernel
  */
-void InjKernelRoutine(PKAPC Apc, PKNORMAL_ROUTINE *NormalRoutine, PVOID *NormalContext, PVOID *SystemArgument1, PVOID *SystemArgument2)
+void InjKernelRoutine(PKAPC Apc, PKNORMAL_ROUTINE* NormalRoutine, PVOID* NormalContext, PVOID* SystemArgument1, PVOID* SystemArgument2)
 {
 	UNREFERENCED_PARAMETER(NormalRoutine);
 	UNREFERENCED_PARAMETER(NormalContext);
 	UNREFERENCED_PARAMETER(SystemArgument1);
 	UNREFERENCED_PARAMETER(SystemArgument2);
 
-	ExFreePoolWithTag(Apc, INJ_MEMORY_TAG);
+	ExFreePoolWithTag(Apc, TAG_INJ);
 }
 
 // =====================================================================================
@@ -173,6 +137,8 @@ void InjNormalRoutine(PVOID NormalContext, PVOID SystemArgument1, PVOID SystemAr
 
 	PINJECTION_INFO info = (PINJECTION_INFO)NormalContext;
 
+	UNREFERENCED_PARAMETER(info);
+
 	// Aqui se realiza la otra funcion
 }
 
@@ -194,7 +160,7 @@ NTSTATUS Injection(PINJECTION_INFO info)
 
 	if (!NT_SUCCESS(status))
 	{
-		return Status;
+		return status;
 	}
 
 	// Mandamos a llamar la funcion de inyeccion en la seccion
@@ -202,7 +168,7 @@ NTSTATUS Injection(PINJECTION_INFO info)
 
 	ZwClose(SectionHandle);
 
-	if (NTSUCCESS(status))
+	if (NT_SUCCESS(status))
 	{
 		KeTestAlertThread(UserMode);
 	}
@@ -218,15 +184,15 @@ NTSTATUS InjectOnSection(PINJECTION_INFO info, HANDLE SectionHandle, SIZE_T Sect
 
 	// Aqui obtenemos la seccion de memoria y la mapeamos, lo abrimos como read and write
 	status = ZwMapViewOfSection(SectionHandle,
-								ZwCurrentProcess(),
-								&SectionMemoryAddress,
-								0,
-								SectionSize,
-								NULL,
-								&SectionSize,
-								ViewUnmap,
-								0,
-								PAGE_READWRITE);
+		ZwCurrentProcess(),
+		&SectionMemoryAddress,
+		0,
+		SectionSize,
+		NULL,
+		&SectionSize,
+		ViewUnmap,
+		0,
+		PAGE_READWRITE);
 
 	// Revisar si fue exitoso
 	if (!NT_SUCCESS(status))
@@ -255,15 +221,15 @@ NTSTATUS InjectOnSection(PINJECTION_INFO info, HANDLE SectionHandle, SIZE_T Sect
 	SectionMemoryAddress = NULL;
 
 	status = ZwMapViewOfSection(SectionHandle,
-								ZwCurrentProcess(),
-								&SectionMemoryAddress,
-								0,
-								PAGE_SIZE,
-								NULL,
-								&SectionSize,
-								ViewUnmap,
-								0,
-								PAGE_EXECUTE_READ);
+		ZwCurrentProcess(),
+		&SectionMemoryAddress,
+		0,
+		PAGE_SIZE,
+		NULL,
+		&SectionSize,
+		ViewUnmap,
+		0,
+		PAGE_EXECUTE_READ);
 
 	if (!NT_SUCCESS(status))
 	{
@@ -272,17 +238,17 @@ NTSTATUS InjectOnSection(PINJECTION_INFO info, HANDLE SectionHandle, SIZE_T Sect
 
 	ApcRoutineAddress = SectionMemoryAddress;
 	DllPath = (PWCHAR)((PUCHAR)SectionMemoryAddress + Functionx64_lenght);
-	PVOID ApcContext = (PVOID)InjectionInfo->LdrLoadDllRoutineAddress;
+	PVOID ApcContext = (PVOID)info->LdrLoadDllRoutineAddress;
 	PVOID ApcArgument1 = (PVOID)DllPath;
 	PVOID ApcArgument2 = (PVOID)DllToInject.Length;
 
 	// Se crea la rutina APC
-	PKNORMAL ApcRoutine = (PKNORMAL_ROUTINE)(ULONG_PTR)ApcRoutineAddress;
+	PKNORMAL_ROUTINE ApcRoutine = (PKNORMAL_ROUTINE)(ULONG_PTR)ApcRoutineAddress;
 
 	// Inyectamos el APC
 	status = InjQueueApc(UserMode, ApcRoutine, ApcContext, ApcArgument1, ApcArgument2);
 
-	if (!NT_STATUS(status))
+	if (!NT_SUCCESS(status))
 	{
 		ZwUnmapViewOfSection(ZwCurrentProcess(), SectionMemoryAddress);
 	}
@@ -423,8 +389,8 @@ PVOID RtlxFindExportedRoutineByName(PVOID DllBase, PANSI_STRING ExportName)
 	PULONG ExportTable;
 
 	ExportDirectory = (PIMAGE_EXPORT_DIRECTORY)RtlImageDirectoryEntryToData(DllBase, TRUE,
-																			IMAGE_DIRECTORY_ENTRY_EXPORT,
-																			&ExportSize);
+		IMAGE_DIRECTORY_ENTRY_EXPORT,
+		&ExportSize);
 
 	if (!ExportDirectory)
 	{
@@ -507,7 +473,7 @@ BOOLEAN IsSuffixedUnicodeString(PCUNICODE_STRING FullName, PCUNICODE_STRING Shor
 		UNICODE_STRING ustr = {
 			ShortName->Length,
 			ustr.Length,
-			(PWSTR)RtlOffsetToPointer(FullName->Buffer, FullName->Length - ustr.Length)};
+			(PWSTR)RtlOffsetToPointer(FullName->Buffer, FullName->Length - ustr.Length) };
 
 		return RtlEqualUnicodeString(&ustr, ShortName, CaseInsensitive);
 	}
