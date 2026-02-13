@@ -99,6 +99,111 @@ Cada elemento es usado para lo siguiente:
 
 - ```LdrLoadDllRoutineAddress``` Este es un elemento importante, aqui guardaremos el puntero a la dirección donde se encuentra la función de carga de DLL por parte de NTDLL.
 
+### Funciones para manipular la estructura INJECT_INFO
+Tenemos 4 funciones para manipular la estructura ```INJECTION_INFO```, cada una es necesaria para cada parte del código. 
+
+
+1. ```CreateInfo``` nos ayuda a crear el elemento para la información de nuestra estructura, como parámetro se pasa un ```HANDLE``` este es el proceso en el cual es generada la información para la inyección. Esta nos retorna un valor tipo ```NTSTATUS``` que nos indica que todo se generó correctamente en función con el valor ```STATUS_SUCCESS```.
+
+    ```Cpp
+    NTSTATUS CreateInfo(HANDLE ProcessId);
+    ```
+
+    Esta función ya expandida, lo que realiza es una asignación de memoria donde genera un puntero a una variable tipo ```INJECTION_INFO``` a la cual se le asignó memoria, se le da el valor del ID del proceso y se agrega el punto de entrada de la estructura a la última posición de la lista global.
+
+    Podemos observarlo en el código expandido:
+    ```Cpp
+    NTSTATUS CreateInfo(HANDLE ProcessId)
+    {
+        PINJECTION_INFO InfoCreated = (PINJECTION_INFO)ExAllocatePool2(POOL_FLAG_NON_PAGED, sizeof(INJECTION_INFO), TAG_INJ);
+
+        if (!InfoCreated)
+            return STATUS_MEMORY_NOT_ALLOCATED;
+
+        RtlZeroMemory(InfoCreated, sizeof(INJECTION_INFO));
+
+        InfoCreated->ProcessId = ProcessId;
+
+        InsertTailList(&g_list_entry, &InfoCreated->entry);
+
+        return STATUS_SUCCESS;
+    }
+    ```
+
+2. ```FindInfoElement``` es una función que nos retorna un puntero tipo ```INJECTION_INFO```, este depende del proceso que le demos a la función, si es una función a la que no se le ha generado o asignado un valor o estructura retornara un valor tipo ```NULL```.
+
+    ```Cpp
+    PINJECTION_INFO FindInfoElement(HANDLE ProcessId);
+    ```
+    La función internamente lo que realiza es obtener un puntero a una variable tipo ```INJECTION_INFO``` usando la variable global ```g_list_entry```. Empieza apuntando al primer elemento de la lista con la linea de código ```PLIST_ENTR NextEntry = g_list_entry.Flink;```. Usando un bucle ```while```, busca un puntero ```PINJECTION_INFO``` hasta que el proceso que se le pase sea el mismo al que almacena o ```NextEntry``` sea igual al punto de incio de la lista, dependiendo que suceda primero retorna el puntero o un puntero nulo.
+
+    ```Cpp
+    PINJECTION_INFO FindInfoElement(HANDLE ProcessId)
+    {
+        PLIST_ENTRY NextEntry = g_list_entry.Flink;
+
+        while (NextEntry != &g_list_entry)
+        {
+            PINJECTION_INFO info = CONTAINING_RECORD(NextEntry, INJECTION_INFO, entry);
+
+            if (info->ProcessId == ProcessId)
+            {
+                return info;
+            }
+        }
+
+        return NULL;
+    }
+    ```
+
+3. ```RemoveInfoByProcess``` este se utiliza para eliminar una estructura o variable tipo ```INJECTION_INFO``` según el proceso que se le pase. Este retorna un valor tipo ```BOOLEAN```, si es ```TRUE``` es porque completo sin problemas la eliminación y asignación de memoria de este.
+
+    ```Cpp
+    BOOLEAN RemoveInfoByProcess(HANDLE ProcessId)
+    ```
+
+    En esta función realiza casi lo mismo que ```FindInfoElement``` pero en vez de asignar, elimina la asignación de memoria y retira el puntero de la lista.
+
+    ```Cpp
+    BOOLEAN RemoveInfoByProcess(HANDLE ProcessId)
+    {
+        PINJECTION_INFO info = FindInfoElement(ProcessId);
+
+        if (!info)
+        {
+            return FALSE;
+        }
+
+        RemoveEntryList(&info->entry);
+        ExFreePoolWithTag(info, TAG_INJ);
+        return TRUE;
+    }
+    ```
+
+4. ```CanBeInjected``` Se usa para sabes si se puede inyectar, en el código es más usado para filtrar si ya se obtuvo la dirección de la función de ```LoadLDRDll``` o si ya fue inyectada la DLL. 
+
+    ```Cpp
+    BOOLEAN CanBeInjected(PINJECTION_INFO info)
+    ```
+
+    Lo único que realiza está función es validar varios campos de la estructura, si ya sé inyectó, ya está obtenida la dirección de la función.
+
+    ```Cpp
+    BOOLEAN CanBeInjected(PINJECTION_INFO info)
+    {
+        if (!info)
+        {
+            return FALSE;
+        }
+
+        if (info->LdrLoadDllRoutineAddress)
+        {
+            return FALSE;
+        }
+
+        return TRUE;
+    }
+    ``` 
 
 ## Funciones APC 
 Las funciones APC (Asynchronous Procedure Calls) son rutinas que nos ayudan a realizar acciones en cierto proceso en el que estemos enfocados. Son importantes ya que nos brindan facilidad de ejecutar código en contexto de usuario o de kernel. 
@@ -151,3 +256,65 @@ typedef VOID KKERNEL_ROUTINE(PRKAPC Apc, PKNORMAL_ROUTINE* NormalRoutine, PVOID*
 typedef KKERNEL_ROUTINE(NTAPI* PKKERNEL_ROUTINE);
 typedef VOID(NTAPI* PKRUNDOWN_ROUTINE)(PRKAPC Apc);
 ```
+
+Los prototipos se definen para evitar problemas con el compilador y ejecutar correctamente el código. Estas funciones se utilizan para que podamos ejecutar rutinas en modo kernel y en modo usuario. En el [código](Source.cpp) creamos una función para poder ejecutar nuestras rutinas, simplificando un poco el código y no agregar diversas lineas de código, la encontramos definida cómo:
+
+``` Cpp
+NTSTATUS InjQueueApc(
+    KPROCESSOR_MODE ApcMode, 
+    PKNORMAL_ROUTINE NormalRoutine, 
+    PVOID NormalContext, 
+    PVOID SystemArgument1, 
+    PVOID SystemArgument2
+    );
+```
+
+Más adelante platicaré más a fondo sobre esta función en la explicación del código.
+
+## Código Fuente
+En el archivo [DrvrDefs.h](DrvrDefs.h) contiene todas las definiciones necesarias que ocupamos (macros, definiciones de funciones APC y constantes). Aqui encontramos tres macros importantes: ```DLL_HOOKED_PATH``` la DLL que vamos a estar monitoreando si se carga en algún proceso, ```DLL_PATH_NATIVE``` es la ruta de nuestra DLL que usaremos para inyectar. ```NTDLL_NATIVE_PATH``` es la ruta de la NTDLL que se carga en cada proceso generado, esta macro es de suma ayuda para obtener la dirección de memoria de la función que ocupamos para inyectar nuestra DLL.
+
+### EntryDriver
+En nuestro ```EntryDriver``` lo que se realiza es asignar las rutinas cuando se detecte un proceso creado y una rutina para que detecte cuando se carga una DLL.
+Mediante observación detecté que rutina se ejecuta primero y que funcionamiento me puede ayudar para implementar en el código. En el siguiente bloque de código se muestra cómo esta programado el ```EntryDriver```:
+
+```Cpp
+
+PLOAD_IMAGE_NOTIFY_ROUTINE RoutineImageLoad = (PLOAD_IMAGE_NOTIFY_ROUTINE) NotifyForAImageLoaded;
+
+PCREATE_PROCESS_NOTIFY_ROUTINE RoutineProcessCreated = (PCREATE_PROCESS_NOTIFY_ROUTINE) NotifyForCreateAProcess;
+
+...
+
+extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
+{
+	UNREFERENCED_PARAMETER(DriverObject);
+	UNREFERENCED_PARAMETER(RegistryPath);
+
+	InitilizeInfoList();
+
+	NTSTATUS status = PsSetLoadImageNotifyRoutine(RoutineImageLoad);
+
+	if (!NT_SUCCESS(status))
+	{
+		return status;
+	}
+
+	status = PsSetCreateProcessNotifyRoutine(NotifyForCreateAProcess, FALSE);
+
+	if (!NT_SUCCESS(status))
+	{
+		PsRemoveLoadImageNotifyRoutine(RoutineImageLoad);
+		return status;
+	}
+
+	// Asignamos la funcion de Descarga del Driver
+	DriverObject->DriverUnload = Unload;
+
+	return status;
+}
+```
+
+La función ```InitilizeInfoList()``` solo inicializa nuestra variable global ```g_list_entry```.
+
+Vamos con la rutina ```NotifyForCreateAProcess```, esta únicamente se ejecuta cada vez que un proceso se crea o se finaliza, tomando ventaja de esto, lo que se hace es generar la información de una estructura ```INJECTION_INFO``` que se enlaza después con la lista de entrada de la variable global ```g_list_entry```. Si el proceso se finaliza, lo único que se realiza es remover los elementos de la lista y liberar memoria. 
