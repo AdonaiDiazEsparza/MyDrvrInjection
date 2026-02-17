@@ -83,9 +83,13 @@ NTSTATUS InjectOnSection(PINJECTION_INFO info, HANDLE SectionHandle, SIZE_T Sect
 
 void InjKernelRoutine(PKAPC Apc, PKNORMAL_ROUTINE* NormalRoutine, PVOID* NormalContext, PVOID* SystemArgument1, PVOID* SystemArgument2);
 
+// =======================================================================================
+
 void NotifyForCreateAProcess(HANDLE ParentId, HANDLE ProcessId, BOOLEAN create);
 
 void NotifyForAImageLoaded(PUNICODE_STRING ImageName, HANDLE ProcessId, PIMAGE_INFO ImageInfo);
+
+void CheckEveryDLLAdded(PUNICODE_STRING ImageName, HANDLE ProcessId, PIMAGE_INFO ImageInfo);
 
 // =======================================================================================
 
@@ -689,6 +693,27 @@ void NotifyForCreateAProcess(HANDLE ParentId, HANDLE ProcessId, BOOLEAN create)
 }
 
 
+/**
+ * @brief Rutina para enseñar unicamente las DLLS que se iran cargando, esto me ayudara en el Debuggeo de 32bit
+ *
+ * @param ImageName Nombre de la imagen o DLL cargada
+ *
+ * @param ProcessId Es un handle y contiene el id del proceso que carga la DLL
+ *
+ * @param ImageInfo Informacion de la DLL cargada
+ */
+void CheckEveryDLLAdded(PUNICODE_STRING ImageName, HANDLE ProcessId, PIMAGE_INFO ImageInfo)
+{
+	UNREFERENCED_PARAMETER(ImageInfo);
+
+	if(IoIs32bitProcess(NULL)){
+		PRINT("[.] x32 PID: %d IMG: %wZ", ProcessId, ImageName);
+	}else{
+		PRINT("[.] x64 PID: %d IMG: %wZ", ProcessId, ImageName);
+	}
+
+}
+
 // =========================================================================================================
 
 /*
@@ -708,12 +733,16 @@ void Unload(PDRIVER_OBJECT DriverObject)
 		PRINT("[-] ERROR REMOVIENDO RUTINA DE CARGA DE DLL: 0x%x", status);
 	}
 
+#ifndef DEBUG_DLL
+
 	status = PsSetCreateProcessNotifyRoutine(RoutineProcessCreated, TRUE);
 
 	if (!NT_SUCCESS(status))
 	{
 		PRINT("[-] ERROR REMOVIENDO LA RUTINA DE CREACION DE PROCESOS: 0x%x", status);
 	}
+
+#endif
 
 	DestroyLists(); // Destruimos todas las listas
 
@@ -731,6 +760,10 @@ extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING Reg
 
 	InitilizeInfoList();
 
+#ifdef DEBUG_DLL
+	RoutineImageLoad = (PLOAD_IMAGE_NOTIFY_ROUTINE) CheckEveryDLLAdded;
+#endif
+
 	NTSTATUS status = PsSetLoadImageNotifyRoutine(RoutineImageLoad);
 
 	if (!NT_SUCCESS(status))
@@ -738,6 +771,8 @@ extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING Reg
 		PRINT("[-] ERROR 0x%x", status);
 		return status;
 	}
+
+#ifndef DEBUG_DLL
 
 	status = PsSetCreateProcessNotifyRoutine(RoutineProcessCreated, FALSE);
 
@@ -748,6 +783,8 @@ extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING Reg
 
 		return status;
 	}
+
+#endif
 
 	// Asignamos la funcion de Descarga del Driver
 	DriverObject->DriverUnload = Unload;

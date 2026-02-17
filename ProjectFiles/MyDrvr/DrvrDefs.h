@@ -7,6 +7,8 @@
 
 #define DRIVER_PREFIX "=> DRIVER_TEST: " // Prefix for the logs
 
+#define DEBUG_DLL
+
 // Nombre de la DLL para filtrar
 #define DLL_HOOKED_PATH L"\\hola.dll"
 
