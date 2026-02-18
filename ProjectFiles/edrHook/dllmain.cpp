@@ -4,7 +4,17 @@
 #include <stdio.h>
 #include <time.h>
 #include <winternl.h>
-#include "detours.h"
+
+/*
+* Agredo esta linea para no tener problemas con las librerias de Detours para las de 
+* x86 y x64
+*/
+
+#ifdef _WIN64
+#include "Detx64/detours.h"
+#else
+#include "Detx86/detours.h"
+#endif
 
 /*
 * La primera idea con este DLL es detectar cuando un proceso cargue alguna DLL correspondiente
@@ -101,45 +111,6 @@ void ConfigureDetours() {
     WriteLogFile(EventData);
 }
 
-void detachDetours()
-{
-    DWORD error = NO_ERROR;
-    char EventData[512];
-
-    error = DetourTransactionBegin();
-    if (error != NO_ERROR) {
-        sprintf_s(EventData, "[!] Fallo en inicio de Operacion en DetourTransaction; ERROR %d\n", error);
-        WriteLogFile(EventData);
-        return;
-    }
-
-    error = DetourUpdateThread(GetCurrentThread());
-    if (error != NO_ERROR) {
-        sprintf_s(EventData, "[!] Fallo en inicio de actualizacion de Hilo; ERROR %d\n", error);
-        WriteLogFile(EventData);
-        return;
-    }
-
-    error = DetourDetach((PVOID*)&pSum, hookSuma);
-    if (error != NO_ERROR)
-    {
-        sprintf_s(EventData, "[!] Fallo en DetourDetach; ERROR %d\n", error);
-        WriteLogFile(EventData);
-        return;
-    }
-
-    error = DetourTransactionCommit();
-    if (error != NO_ERROR)
-    {
-        sprintf_s(EventData, "[!] Fallo en finalizacion de Operacion en DetourTransactionCommit; ERROR %d\n", error);
-        WriteLogFile(EventData);
-        return;
-    }
-
-    sprintf_s(EventData, "[+] Detour Desadjuntdo; Finalizado correctamente");
-    WriteLogFile(EventData);
-}
-
 BOOL APIENTRY DllMain(HMODULE hModule,
     DWORD  ul_reason_for_call,
     LPVOID lpReserved
@@ -151,8 +122,6 @@ BOOL APIENTRY DllMain(HMODULE hModule,
         ConfigureDetours();
         break;
     case DLL_THREAD_ATTACH:
-        // detachDetours();
-        break;
     case DLL_THREAD_DETACH:
     case DLL_PROCESS_DETACH:
         break;
