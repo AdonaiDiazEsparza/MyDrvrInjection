@@ -236,9 +236,9 @@ NTSTATUS InjectOnSection(PINJECTION_INFO info, HANDLE SectionHandle, SIZE_T Sect
 		return status;
 	}
 
-	functionCode = InfoCreated->functionToInject;
-	functionLength = InfoCreated->functionLength;
-	DllToInject = InfoCreated->DllToInject;
+	functionCode = info->functionToInject;
+	functionLength = info->functionLength;
+	DllToInject = info->DllToInject;
 
 	// Asignamos la direccion de memoria donde haremos la inyeccion
 	PVOID ApcRoutineAddress = SectionMemoryAddress;
@@ -278,6 +278,10 @@ NTSTATUS InjectOnSection(PINJECTION_INFO info, HANDLE SectionHandle, SIZE_T Sect
 	PVOID ApcContext = (PVOID)info->LdrLoadDllRoutineAddress;
 	PVOID ApcArgument1 = (PVOID)DllPath;
 	PVOID ApcArgument2 = (PVOID)DllToInject.Length;
+
+	if (info->is32BitProcess) {
+		PsWrapApcWow64Thread(&ApcContext, &ApcRoutineAddress);
+	}
 
 	// Se crea la rutina APC
 	PKNORMAL_ROUTINE ApcRoutine = (PKNORMAL_ROUTINE)(ULONG_PTR)ApcRoutineAddress;
@@ -323,24 +327,6 @@ NTSTATUS CreateInfo(HANDLE ProcessId)
 	RtlZeroMemory(InfoCreated, sizeof(INJECTION_INFO));
 
 	InfoCreated->ProcessId = ProcessId;
-
-	/* Aun no se si funcione esta implementacion en esta parte */
-	InfoCreated->is32BitProcess = IoIs32bitProcess(NULL);
-
-	if (InfoCreated->is32BitProcess)
-	{
-		PRINT("[.] Es un proceso de 32Bit");
-
-		InfoCreated->DllToInject = SysWOWDLLToInject;
-		InfoCreated->functionToInject = FunctionX86;
-		InfoCreated->functionLength = Functionx86_lenght;
-
-	}else{
-
-		InfoCreated->DllToInject = NativeDLLToInject;
-		InfoCreated->functionToInject = FunctionX64;
-		InfoCreated->functionLength = Functionx64_lenght;
-	}
 
 	InsertTailList(&g_list_entry, &InfoCreated->entry);
 
@@ -409,7 +395,6 @@ BOOLEAN CanBeInjected(PINJECTION_INFO info)
 
 	if (info->LdrLoadDllRoutineAddress)
 	{
-		PRINT("[.] Direccion de Rutina de Load ya asignado");
 		return FALSE;
 	}
 
@@ -611,7 +596,6 @@ void NotifyForAImageLoaded(PUNICODE_STRING ImageName, HANDLE ProcessId, PIMAGE_I
 	// Si retorna un NULL
 	if (info == NULL)
 	{
-		PRINT("[!] Informacion no obtenida para este proceso");
 		return;
 	}
 
@@ -621,15 +605,34 @@ void NotifyForAImageLoaded(PUNICODE_STRING ImageName, HANDLE ProcessId, PIMAGE_I
 	// Revisa si el proceso esta protegido
 	if (PsIsProtectedProcess(process) && ImageInfo->SystemModeImage) // Por el momento agregare el filtro si es un proceso de 32bit
 	{
-		if (RemoveInfoByProcess(ProcessId))
+		if (!RemoveInfoByProcess(ProcessId))
 		{
-			PRINT("[.] Informacion removida de este proceso protegido %d", ProcessId);
+			PRINT("[-] Informacion no removida de este proceso protegido %d", ProcessId);
 		}
 		return;
 	}
 
+	if (IoIs32bitProcess(NULL) && !info->isSetConfiguration)
+	{
+		PRINT("[.] Es un proceso de 32Bit");
+		info->DllToInject = SysWOWDLLToInject;
+		info->functionToInject = FunctionX86;
+		info->functionLength = Functionx86_lenght;
+		info->is32BitProcess = TRUE;
+		info->isSetConfiguration = TRUE;
+	}
+
+	if (!IoIs32bitProcess(NULL) && !info->isSetConfiguration)
+	{
+		PRINT("[.] Es un proceso de 64Bit");
+		info->DllToInject = NativeDLLToInject;
+		info->functionToInject = FunctionX64;
+		info->functionLength = Functionx64_lenght;
+		info->isSetConfiguration = TRUE;
+	}
+
 	// Imprimir Nombre de la imagen cargada
-	PRINT("[.] PID: %d NombreImagen: %wZ", ProcessId, ImageName);
+	PRINT("[.] PID: %d IMG: %wZ", ProcessId, ImageName);
 
 	// Ahora toca buscar la DLL correspondiente
 	if (CanBeInjected(info))
@@ -640,23 +643,23 @@ void NotifyForAImageLoaded(PUNICODE_STRING ImageName, HANDLE ProcessId, PIMAGE_I
 		/* Aqui debo buscar la DLL entre las DLL que se carguen */
 		if (IsSuffixedUnicodeString(ImageName, &path_dll, TRUE))
 		{
-			// Funcionara?
+			// Aqui veremos si funciona
+			PRINT("[+] Obtenida de: %wZ", path_dll);
+
 			PVOID LdrLoadDllRoutineAddress = RtlxFindExportedRoutineByName(ImageInfo->ImageBase, &LdrLoadDLLRoutineName);
 
 			// Si retorna un valor Nulo estaremos mal
 			if (!LdrLoadDllRoutineAddress)
 			{
-				PRINT("[-] RUTINA NO OBTENIDA");
-				PRINT("[.] Removiendo informacion de este proceso");
+				PRINT("[-] RUTINA NO OBTENIDA Removiendo informacion de este proceso");
 				if (RemoveInfoByProcess(ProcessId))
 				{
-					PRINT("[+] Informacion removida");
+					PRINT("[-] Informacion No removida");
 				}
 				return;
 			}
 
-			PRINT("[+] Direccion de la funcion LdrDLL obtenida");
-			PRINT("[+] Direccion:  0x%x", LdrLoadDllRoutineAddress);
+			PRINT("[+] Direccion (LDR):  0x%x", LdrLoadDllRoutineAddress);
 			info->LdrLoadDllRoutineAddress = LdrLoadDllRoutineAddress;
 		}
 

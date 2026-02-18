@@ -70,6 +70,11 @@ typedef struct _INJECTION_INFO
     BOOLEAN is32BitProcess;
 
     /**
+     * @brief esta variable indica si ya se configuraron los valores de 32bit correspondientes
+     */
+    BOOLEAN isSetConfiguration;
+
+    /**
      * @brief Puntero a la funcion Shellcode
      */
     PUCHAR functionToInject;
@@ -80,7 +85,7 @@ typedef struct _INJECTION_INFO
     SIZE_T functionLength;
 
     /**
-     * @brief esta variable almacenara el tipo de 
+     * @brief esta variable almacenara el tipo de
      */
     UNICODE_STRING DllToInject;
 
