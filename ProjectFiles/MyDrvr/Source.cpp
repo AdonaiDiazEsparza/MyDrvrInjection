@@ -10,7 +10,9 @@ LIST_ENTRY g_list_entry; // Esta variable contiene todos los nodos de informacio
 
 ANSI_STRING LdrLoadDLLRoutineName = RTL_CONSTANT_STRING("LdrLoadDll"); // Funcion que buscamos en NTDLL para poder inyectar nuestra DLL
 
-UNICODE_STRING DllToInject = RTL_CONSTANT_STRING(DLL_PATH_NATIVE);
+// Las constantes de las DLL que usaremos para inyectar
+UNICODE_STRING NativeDLLToInject = RTL_CONSTANT_STRING(DLL_PATH_NATIVE);
+UNICODE_STRING SysWOWDLLToInject = RTL_CONSTANT_STRING(DLL_PATH_WOW64);
 
 // =====================================================================================
 
@@ -37,21 +39,22 @@ UCHAR FunctionX86[] = {
 };
 
 UCHAR FunctionX64[] = {
-0x48, 0x83, 0xec, 0x38, 				// sub    rsp,0x38
-0x48, 0x89, 0xc8, 						// mov    rax,rcx
-0x66, 0x44, 0x89, 0x44, 0x24, 0x20, 	// mov    [rsp+0x20],r8w
-0x66, 0x44, 0x89, 0x44, 0x24, 0x22, 	// mov    [rsp+0x22],r8w
-0x4c, 0x8d, 0x4c, 0x24, 0x40,	 		// lea    r9,[rsp+0x40]
-0x48, 0x89, 0x54, 0x24, 0x28, 			// mov    [rsp+0x28],rdx
-0x4c, 0x8d, 0x44, 0x24, 0x20, 			// lea    r8,[rsp+0x20]
-0x31, 0xd2, 							// xor    edx,edx
-0x31, 0xc9, 							// xor    ecx,ecx
-0xff, 0xd0, 							// call   rax
-0x48, 0x83, 0xc4, 0x38,			 		// add    rsp,0x38
-0xc2, 0x00, 0x00, 						// ret    0x0
+	0x48, 0x83, 0xec, 0x38, 				// sub    rsp,0x38
+	0x48, 0x89, 0xc8, 						// mov    rax,rcx
+	0x66, 0x44, 0x89, 0x44, 0x24, 0x20, 	// mov    [rsp+0x20],r8w
+	0x66, 0x44, 0x89, 0x44, 0x24, 0x22, 	// mov    [rsp+0x22],r8w
+	0x4c, 0x8d, 0x4c, 0x24, 0x40,	 		// lea    r9,[rsp+0x40]
+	0x48, 0x89, 0x54, 0x24, 0x28, 			// mov    [rsp+0x28],rdx
+	0x4c, 0x8d, 0x44, 0x24, 0x20, 			// lea    r8,[rsp+0x20]
+	0x31, 0xd2, 							// xor    edx,edx
+	0x31, 0xc9, 							// xor    ecx,ecx
+	0xff, 0xd0, 							// call   rax
+	0x48, 0x83, 0xc4, 0x38,			 		// add    rsp,0x38
+	0xc2, 0x00, 0x00, 						// ret    0x0
 };
 
 SIZE_T Functionx64_lenght = sizeof(FunctionX64);
+SIZE_T Functionx86_lenght = sizeof(FunctionX86);
 
 // =====================================================================================
 
@@ -93,9 +96,9 @@ void CheckEveryDLLAdded(PUNICODE_STRING ImageName, HANDLE ProcessId, PIMAGE_INFO
 
 // =======================================================================================
 
-PLOAD_IMAGE_NOTIFY_ROUTINE RoutineImageLoad = (PLOAD_IMAGE_NOTIFY_ROUTINE) NotifyForAImageLoaded;
+PLOAD_IMAGE_NOTIFY_ROUTINE RoutineImageLoad = (PLOAD_IMAGE_NOTIFY_ROUTINE)NotifyForAImageLoaded;
 
-PCREATE_PROCESS_NOTIFY_ROUTINE RoutineProcessCreated = (PCREATE_PROCESS_NOTIFY_ROUTINE) NotifyForCreateAProcess;
+PCREATE_PROCESS_NOTIFY_ROUTINE RoutineProcessCreated = (PCREATE_PROCESS_NOTIFY_ROUTINE)NotifyForCreateAProcess;
 
 // =======================================================================================
 
@@ -208,6 +211,12 @@ NTSTATUS InjectOnSection(PINJECTION_INFO info, HANDLE SectionHandle, SIZE_T Sect
 
 	PVOID SectionMemoryAddress = NULL;
 
+	SIZE_T functionLength = 0;
+
+	PUCHAR functionCode = NULL;
+
+	UNICODE_STRING DllToInject;
+
 	// Aqui obtenemos la seccion de memoria y la mapeamos, lo abrimos como read and write
 	status = ZwMapViewOfSection(SectionHandle,
 		ZwCurrentProcess(),
@@ -227,16 +236,29 @@ NTSTATUS InjectOnSection(PINJECTION_INFO info, HANDLE SectionHandle, SIZE_T Sect
 		return status;
 	}
 
+	// Revisar que tipo de proceso es el nuestro, ya sea 32 o 64 bits
+	if (!info->is32BitProcess) {
+
+		// Si no es de 32 bit, entonces asignamos la shellcode de 64 bits y su longitud
+		functionCode = FunctionX64;
+		functionLength = Functionx64_lenght;
+		DllToInject = NativeDLLToInject;
+	}
+	else {
+		// Asignamos la shellcode de 32bit y su longitud
+		functionCode = FunctionX86;
+		functionLength = Functionx86_lenght;
+		DllToInject = SysWOWDLLToInject;
+	}
+
 	// Asignamos la direccion de memoria donde haremos la inyeccion
 	PVOID ApcRoutineAddress = SectionMemoryAddress;
 
-	/* ======= Esta seccion de codigo la modificare despues para un proceso x86 ====================================================== */
-
 	// Aqui copiamos la direccion de la rutina, en este caso es la shellcode para su inyeccion
-	RtlCopyMemory(ApcRoutineAddress, FunctionX64, sizeof(FunctionX64));
+	RtlCopyMemory(ApcRoutineAddress, functionCode, functionLength);
 
 	// Obtenemos la direccion de la DLL
-	PWCHAR DllPath = (PWCHAR)((PUCHAR)SectionMemoryAddress + Functionx64_lenght);
+	PWCHAR DllPath = (PWCHAR)((PUCHAR)SectionMemoryAddress + functionLength);
 
 	// Copiamos la direccion de la DLL y su buffer
 	RtlCopyMemory(DllPath, DllToInject.Buffer, DllToInject.Length);
@@ -263,7 +285,7 @@ NTSTATUS InjectOnSection(PINJECTION_INFO info, HANDLE SectionHandle, SIZE_T Sect
 	}
 
 	ApcRoutineAddress = SectionMemoryAddress;
-	DllPath = (PWCHAR)((PUCHAR)SectionMemoryAddress + Functionx64_lenght);
+	DllPath = (PWCHAR)((PUCHAR)SectionMemoryAddress + functionLength);
 	PVOID ApcContext = (PVOID)info->LdrLoadDllRoutineAddress;
 	PVOID ApcArgument1 = (PVOID)DllPath;
 	PVOID ApcArgument2 = (PVOID)DllToInject.Length;
@@ -556,6 +578,18 @@ BOOLEAN IsMappedByLdrLoadDll(PCUNICODE_STRING ShortName)
 	return FALSE;
 }
 
+UNICODE_STRING GetDLLForThePathResolution(BOOLEAN is32bit) {
+	if (is32bit)
+	{
+		SET_UNICODE_STRING(path, NTDLL_WOW64_PATH);
+		return path;
+	}
+
+	SET_UNICODE_STRING(path, NTDLL_NATIVE_PATH);
+
+	return path;
+}
+
 // ========================================================================================================
 
 /**
@@ -586,7 +620,7 @@ void NotifyForAImageLoaded(PUNICODE_STRING ImageName, HANDLE ProcessId, PIMAGE_I
 	GET_PEPROCESS(process, ProcessId);
 
 	// Revisa si el proceso esta protegido
-	if (PsIsProtectedProcess(process) && info->is32BitProcess && ImageInfo->SystemModeImage) // Por el momento agregare el filtro si es un proceso de 32bit
+	if (PsIsProtectedProcess(process) && ImageInfo->SystemModeImage) // Por el momento agregare el filtro si es un proceso de 32bit
 	{
 		if (RemoveInfoByProcess(ProcessId))
 		{
@@ -602,7 +636,7 @@ void NotifyForAImageLoaded(PUNICODE_STRING ImageName, HANDLE ProcessId, PIMAGE_I
 	if (CanBeInjected(info))
 	{
 
-		SET_UNICODE_STRING(path_dll, NTDLL_NATIVE_PATH);
+		UNICODE_STRING path_dll = GetDLLForThePathResolution(info->is32BitProcess);
 
 		/* Aqui debo buscar la DLL entre las DLL que se carguen */
 		if (IsSuffixedUnicodeString(ImageName, &path_dll, TRUE))
@@ -630,15 +664,15 @@ void NotifyForAImageLoaded(PUNICODE_STRING ImageName, HANDLE ProcessId, PIMAGE_I
 		return;
 	}
 
-	SET_UNICODE_STRING(dll_hooked , DLL_HOOKED_PATH);
+	SET_UNICODE_STRING(dll_hooked, DLL_HOOKED_PATH);
 
-	if (!info->isInjected && IsSuffixedUnicodeString(ImageName, &dll_hooked, TRUE) && info->LdrLoadDllRoutineAddress){
+	if (!info->isInjected && IsSuffixedUnicodeString(ImageName, &dll_hooked, TRUE) && info->LdrLoadDllRoutineAddress) {
 
 
 		PRINT("[!] Intento de inyeccion a hola.dll");
 
 		KAPC_STATE* apc_state = (KAPC_STATE*)ExAllocatePool2(POOL_FLAG_NON_PAGED, sizeof(KAPC_STATE), 'gat');
-		
+
 		if (!apc_state) {
 			PRINT("[-] APC STATE no asignado correctamente");
 			RemoveInfoByProcess(ProcessId);
@@ -692,6 +726,7 @@ void NotifyForCreateAProcess(HANDLE ParentId, HANDLE ProcessId, BOOLEAN create)
 	}
 }
 
+// =========================================================================================================
 
 /**
  * @brief Rutina para enseñar unicamente las DLLS que se iran cargando, esto me ayudara en el Debuggeo de 32bit
@@ -706,19 +741,14 @@ void CheckEveryDLLAdded(PUNICODE_STRING ImageName, HANDLE ProcessId, PIMAGE_INFO
 {
 	UNREFERENCED_PARAMETER(ImageInfo);
 
-	if(IoIs32bitProcess(NULL)){
+	if (IoIs32bitProcess(NULL)) {
 		PRINT("[.] x32 PID: %d IMG: %wZ", ProcessId, ImageName);
-	}else{
+	}
+	else {
 		PRINT("[.] x64 PID: %d IMG: %wZ", ProcessId, ImageName);
 	}
 
 }
-
-// =========================================================================================================
-
-/*
-	PROXIMAMENTE AGREGARE UNA FUNCION PARA LAS RUTINAS
-*/
 
 // =========================================================================================================
 
@@ -761,7 +791,7 @@ extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING Reg
 	InitilizeInfoList();
 
 #ifdef DEBUG_DLL
-	RoutineImageLoad = (PLOAD_IMAGE_NOTIFY_ROUTINE) CheckEveryDLLAdded;
+	RoutineImageLoad = (PLOAD_IMAGE_NOTIFY_ROUTINE)CheckEveryDLLAdded;
 #endif
 
 	NTSTATUS status = PsSetLoadImageNotifyRoutine(RoutineImageLoad);

@@ -7,14 +7,14 @@
 
 #define DRIVER_PREFIX "=> DRIVER_TEST: " // Prefix for the logs
 
-#define DEBUG_DLL
+// #define DEBUG_DLL // Esta macro unicamente funciona para ver que dlls se cargan y en que proceso
 
 // Nombre de la DLL para filtrar
 #define DLL_HOOKED_PATH L"\\hola.dll"
 
 // Direcciones de las DLL a inyectar, dll para un proceso nativo o para un proceso de 32bit en uno de 64
 #define DLL_PATH_NATIVE L"C:\\test\\edrHook.dll"
-#define DLL_PATH_WOW64 L""
+#define DLL_PATH_WOW64 L"C:\\testWOW\\edrHook.dll"
 
 // Rutas de NTDLL en un proceso nativo o proceso de 32bit en uno de 64
 #define NTDLL_NATIVE_PATH L"System32\\ntdll.dll"
@@ -68,6 +68,11 @@ typedef struct _INJECTION_INFO
      * @brief esta variable indica si es un proceso de 32bit ejecutado en uno de 64bits
      */
     BOOLEAN is32BitProcess;
+
+    /**
+     * @brief esta variable almacenara el tipo de 
+     */
+    UNICODE_STRING DllToInject;
 
     /**
      * @brief Direccion de la rutina de DLL que se va usar
