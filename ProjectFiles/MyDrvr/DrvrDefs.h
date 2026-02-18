@@ -70,12 +70,12 @@ typedef struct _INJECTION_INFO
     BOOLEAN is32BitProcess;
 
     /**
-     * @brief Pointer to the respective shellcode
+     * @brief Puntero a la funcion Shellcode
      */
     PUCHAR functionToInject;
 
     /**
-     * @brief 
+     * @brief Longitud de la shellcode
      */
     SIZE_T functionLength;
 
