@@ -236,20 +236,9 @@ NTSTATUS InjectOnSection(PINJECTION_INFO info, HANDLE SectionHandle, SIZE_T Sect
 		return status;
 	}
 
-	// Revisar que tipo de proceso es el nuestro, ya sea 32 o 64 bits
-	if (!info->is32BitProcess) {
-
-		// Si no es de 32 bit, entonces asignamos la shellcode de 64 bits y su longitud
-		functionCode = FunctionX64;
-		functionLength = Functionx64_lenght;
-		DllToInject = NativeDLLToInject;
-	}
-	else {
-		// Asignamos la shellcode de 32bit y su longitud
-		functionCode = FunctionX86;
-		functionLength = Functionx86_lenght;
-		DllToInject = SysWOWDLLToInject;
-	}
+	functionCode = InfoCreated->functionToInject;
+	functionLength = InfoCreated->functionLength;
+	DllToInject = InfoCreated->DllToInject;
 
 	// Asignamos la direccion de memoria donde haremos la inyeccion
 	PVOID ApcRoutineAddress = SectionMemoryAddress;
@@ -341,6 +330,16 @@ NTSTATUS CreateInfo(HANDLE ProcessId)
 	if (InfoCreated->is32BitProcess)
 	{
 		PRINT("[.] Es un proceso de 32Bit");
+
+		InfoCreated->DllToInject = SysWOWDLLToInject;
+		InfoCreated->functionToInject = FunctionX86;
+		InfoCreated->functionLength = Functionx86_lenght;
+
+	}else{
+
+		InfoCreated->DllToInject = NativeDLLToInject;
+		InfoCreated->functionToInject = FunctionX64;
+		InfoCreated->functionLength = Functionx64_lenght;
 	}
 
 	InsertTailList(&g_list_entry, &InfoCreated->entry);
