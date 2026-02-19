@@ -562,18 +562,6 @@ BOOLEAN IsMappedByLdrLoadDll(PCUNICODE_STRING ShortName)
 	return FALSE;
 }
 
-UNICODE_STRING GetDLLForThePathResolution(BOOLEAN is32bit) {
-	if (is32bit)
-	{
-		SET_UNICODE_STRING(path, NTDLL_WOW64_PATH);
-		return path;
-	}
-
-	SET_UNICODE_STRING(path, NTDLL_NATIVE_PATH);
-
-	return path;
-}
-
 // ========================================================================================================
 
 /**
@@ -612,33 +600,27 @@ void NotifyForAImageLoaded(PUNICODE_STRING ImageName, HANDLE ProcessId, PIMAGE_I
 		return;
 	}
 
-	if (IoIs32bitProcess(NULL) && !info->isSetConfiguration)
-	{
-		PRINT("[.] Es un proceso de 32Bit");
-		info->DllToInject = SysWOWDLLToInject;
-		info->functionToInject = FunctionX86;
-		info->functionLength = Functionx86_lenght;
-		info->is32BitProcess = TRUE;
-		info->isSetConfiguration = TRUE;
-	}
-
-	if (!IoIs32bitProcess(NULL) && !info->isSetConfiguration)
-	{
-		PRINT("[.] Es un proceso de 64Bit");
-		info->DllToInject = NativeDLLToInject;
-		info->functionToInject = FunctionX64;
-		info->functionLength = Functionx64_lenght;
-		info->isSetConfiguration = TRUE;
-	}
-
 	// Imprimir Nombre de la imagen cargada
 	PRINT("[.] PID: %d IMG: %wZ", ProcessId, ImageName);
+
+	SET_UNICODE_STRING(path_filter, NTDLL_WOW64_PATH);
+
+	// Filtramos si detecta \\SysWOW64\\ntdll.dll
+	if (IsSuffixedUnicodeString(ImageName, &path_filter, TRUE)) {
+		info->is32BitProcess = TRUE;
+		info->LdrLoadDllRoutineAddress = NULL;
+	}
 
 	// Ahora toca buscar la DLL correspondiente
 	if (CanBeInjected(info))
 	{
 
-		UNICODE_STRING path_dll = GetDLLForThePathResolution(info->is32BitProcess);
+		SET_UNICODE_STRING(path_dll, NTDLL_NATIVE_PATH);
+
+		// Si detecta el hilo de 32 bit
+		if (info->is32BitProcess) {
+			path_dll = path_filter;
+		}
 
 		/* Aqui debo buscar la DLL entre las DLL que se carguen */
 		if (IsSuffixedUnicodeString(ImageName, &path_dll, TRUE))
@@ -670,6 +652,16 @@ void NotifyForAImageLoaded(PUNICODE_STRING ImageName, HANDLE ProcessId, PIMAGE_I
 
 	if (!info->isInjected && IsSuffixedUnicodeString(ImageName, &dll_hooked, TRUE) && info->LdrLoadDllRoutineAddress) {
 
+
+		info->DllToInject = RTL_CONSTANT_STRING(DLL_PATH_NATIVE);
+		info->functionToInject = FunctionX64;
+		info->functionLength = Functionx64_lenght;
+
+		if (info->is32BitProcess) {
+			info->DllToInject = RTL_CONSTANT_STRING(DLL_PATH_WOW64);
+			info->functionToInject = FunctionX86;
+			info->functionLength = Functionx86_lenght;
+		}
 
 		PRINT("[!] Intento de inyeccion a hola.dll");
 
