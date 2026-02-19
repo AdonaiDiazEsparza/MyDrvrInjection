@@ -12,8 +12,12 @@
 
 #ifdef _WIN64
 #include "Detx64/detours.h"
+#define DLL_PATH "C:\\test\\hola.dll"
+#define CALL_API WINAPI 
 #else
 #include "Detx86/detours.h"
+#define DLL_PATH "C:\\testWOW\\hola.dll"
+#define CALL_API __cdecl
 #endif
 
 /*
@@ -29,7 +33,7 @@
 const char* LogFilePath = "C:\\test\\log.txt";
 
 /* Lo de siempre sera una suma, incluso puede ser una multiplicacion */
-typedef int (WINAPI* anyfun_t)(int, int);
+typedef int (CALL_API* anyfun_t)(int, int);
 
 // Configuramos nuestra funcion como Nula
 anyfun_t pSum = NULL;
@@ -42,14 +46,17 @@ void WriteLogFile(char* Data);
 // ========================================================================
 
 // Added for the Sum
-int WINAPI hookSuma(int a, int b)
+int CALL_API hookSuma(int a, int b)
 {
     char EventData[512];
 
-    sprintf_s(EventData, "[!] Se realizo una suma: %d + %d, se le agregan 100 unidades\n", a, b);
+    int temp = a + b + 100;
+
+    sprintf_s(EventData, "[!] Se realizo una suma: %d + %d, se le agregan el total sera de %d\n", a, b, temp);
 
     WriteLogFile(EventData);
-        return pSum(a, b) + 100;
+       
+    return pSum(a, b) + 100;
 }
 
 /* Funcion para escribir logs en un archivo */
@@ -87,7 +94,7 @@ void ConfigureDetours() {
     }
 
     // Find the specific function from a DLL
-    pSum = (anyfun_t)DetourFindFunction("C:\\test\\hola.dll", "suma");
+    pSum = (anyfun_t)DetourFindFunction(DLL_PATH, "suma");
 
     error = DetourAttach((PVOID*)&pSum, hookSuma);
 
