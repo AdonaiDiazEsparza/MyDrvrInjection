@@ -22,10 +22,6 @@
 
 #define TAG_INJ 'jnI'
 
-/* Macro for print with line jump */
-#define PRINT(fmt, ...) \
-    DbgPrint(DRIVER_PREFIX fmt "\n", ##__VA_ARGS__)
-
 // otra manera de imprimir
 #define print PRINT
 

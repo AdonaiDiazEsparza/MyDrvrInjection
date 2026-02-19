@@ -56,6 +56,15 @@ UCHAR FunctionX64[] = {
 SIZE_T Functionx64_lenght = sizeof(FunctionX64);
 SIZE_T Functionx86_lenght = sizeof(FunctionX86);
 
+
+#ifdef DBG
+/* Macro for print with line jump */
+#define PRINT(fmt, ...) \
+    DbgPrint(DRIVER_PREFIX fmt "\n", ##__VA_ARGS__)
+#else
+inline void PRINT(const char*, ...) {}
+#endif
+
 // =====================================================================================
 
 void InitilizeInfoList();
