@@ -236,9 +236,15 @@ NTSTATUS InjectOnSection(PINJECTION_INFO info, HANDLE SectionHandle, SIZE_T Sect
 		return status;
 	}
 
-	functionCode = info->functionToInject;
-	functionLength = info->functionLength;
-	DllToInject = info->DllToInject;
+	DllToInject = RTL_CONSTANT_STRING(DLL_PATH_NATIVE);
+	functionCode = FunctionX64;
+	functionLength = Functionx64_lenght;
+
+	if (info->is32BitProcess) {
+		DllToInject = RTL_CONSTANT_STRING(DLL_PATH_WOW64);
+		functionCode = FunctionX86;
+		functionLength = Functionx86_lenght;
+	}
 
 	// Asignamos la direccion de memoria donde haremos la inyeccion
 	PVOID ApcRoutineAddress = SectionMemoryAddress;
@@ -651,17 +657,6 @@ void NotifyForAImageLoaded(PUNICODE_STRING ImageName, HANDLE ProcessId, PIMAGE_I
 	SET_UNICODE_STRING(dll_hooked, DLL_HOOKED_PATH);
 
 	if (!info->isInjected && IsSuffixedUnicodeString(ImageName, &dll_hooked, TRUE) && info->LdrLoadDllRoutineAddress) {
-
-
-		info->DllToInject = RTL_CONSTANT_STRING(DLL_PATH_NATIVE);
-		info->functionToInject = FunctionX64;
-		info->functionLength = Functionx64_lenght;
-
-		if (info->is32BitProcess) {
-			info->DllToInject = RTL_CONSTANT_STRING(DLL_PATH_WOW64);
-			info->functionToInject = FunctionX86;
-			info->functionLength = Functionx86_lenght;
-		}
 
 		PRINT("[!] Intento de inyeccion a hola.dll");
 
