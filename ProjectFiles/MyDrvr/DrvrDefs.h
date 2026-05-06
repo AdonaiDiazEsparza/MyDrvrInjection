@@ -9,21 +9,18 @@
 
 // #define DEBUG_DLL // Esta macro unicamente funciona para ver que dlls se cargan y en que proceso
 
-// Nombre de la DLL para filtrar
-#define DLL_HOOKED_PATH L"\\hola.dll"
-
-// Direcciones de las DLL a inyectar, dll para un proceso nativo o para un proceso de 32bit en uno de 64
-#define DLL_PATH_NATIVE L"C:\\test\\edrHook.dll"
-#define DLL_PATH_WOW64 L"C:\\testWOW\\edrHook.dll"
-
-// Rutas de NTDLL en un proceso nativo o proceso de 32bit en uno de 64
-#define NTDLL_NATIVE_PATH L"System32\\ntdll.dll"
-#define NTDLL_WOW64_PATH L"SysWOW64\\ntdll.dll"
-
 #define TAG_INJ 'jnI'
 
 // otra manera de imprimir
 #define print PRINT
+
+#ifdef DBG
+/* Macro for print with line jump */
+#define PRINT(fmt, ...) \
+    DbgPrint(DRIVER_PREFIX fmt "\n", ##__VA_ARGS__)
+#else
+inline void PRINT(const char*, ...) {}
+#endif
 
 // Flipea la TAG
 #define TAG(t) ( ((((ULONG)t) & 0xFF) << (8 * 3)) | ((((ULONG)t) & 0xFF00) << (8 * 1)) | ((((ULONG)t) & 0xFF0000) >> (8 * 1)) | ((((ULONG)t) & 0xFF000000) >> (8 * 3)) )
@@ -43,40 +40,6 @@
 	PEPROCESS peproc = NULL;\
 	PsLookupProcessByProcessId(pid, &peproc)
 
-typedef struct _INJECTION_INFO
-{
-    /**
-     * @brief este es usado para crear el nodo en la lista global
-     */
-    LIST_ENTRY entry;
-
-    /**
-     * @brief variable que almacena el id del proceso
-     */
-    HANDLE ProcessId;
-
-    /**
-     * @brief esta variable es usada para indicar si la DLL ya fue inyectada
-     */
-    BOOLEAN isInjected;
-
-    /**
-     * @brief esta variable indica si es un proceso de 32bit ejecutado en uno de 64bits
-     */
-    BOOLEAN is32BitProcess;
-
-    /**
-     * @brief Direccion de la rutina de DLL que se va usar
-     */
-    PVOID LdrLoadDllRoutineAddress;
-
-}INJECTION_INFO, * PINJECTION_INFO;
-
-// Funciones que se usaran para filtrar
-BOOLEAN IsSuffixedUnicodeString(PCUNICODE_STRING FullName, PCUNICODE_STRING ShortName, BOOLEAN CaseInsensitive);
-BOOLEAN IsMappedByLdrLoadDll(PCUNICODE_STRING ShortName);
-
-
 /* Estas funciones siempre van a estar ahi asi que de una vez las definimos desde este punto */
 enum KAPC_ENVIRONMENT
 {
@@ -93,7 +56,7 @@ enum KAPC_ENVIRONMENT
  *
  */
 
- /* Definimos los tipos de dato a pasar a las rutinas de Ke */
+ /* Definimos los tipos de dato a pasar a las rutinas de Kernel */
 typedef VOID(NTAPI* PKNORMAL_ROUTINE)(PVOID NormalContext, PVOID SystemArgument1, PVOID SystemArgument2);
 typedef VOID KKERNEL_ROUTINE(PRKAPC Apc, PKNORMAL_ROUTINE* NormalRoutine, PVOID* NormalContext, PVOID* SystemArgument1, PVOID* SystemArgument2);
 typedef KKERNEL_ROUTINE(NTAPI* PKKERNEL_ROUTINE);
