@@ -92,7 +92,7 @@ void NotifyForAImageLoaded(PUNICODE_STRING ImageName, HANDLE ProcessId, PIMAGE_I
 		info->LdrLoadDllRoutineAddress = NULL;
 	}
 
-	// Ahora toca buscar la DLL correspondiente
+	//  Aqui en este punto se busca ya poder inyectar 
 	if (CanBeInjected(info))
 	{
 

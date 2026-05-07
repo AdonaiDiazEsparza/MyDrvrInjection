@@ -627,10 +627,58 @@ void ApcNormalRoutine(PVOID NormalContext, PVOID SystemArgument1, PVOID SystemAr
 
 Una vez ejecutada la rutina, si todo sale bien, debe inyectar la DLL al proceso. Sino, se tendrán que hacer ajustes al código. 
 
-## Cosas a hacer (TODO)
-Al punto de este commit, no se ha agregado la funcionalidad para inyectar en procesos de 32bit en una arquitectura de x64, aunque pienso que únicamente hay que agregar unas funciones para que la ejecución Apc se realice de manera correcta, que la dirección de la función ```LDRLoadDLL``` sea la indicada (tiene que ser obtenida de la NTDLL de la ruta SysWow64) y la DLL a inyectar sea para un sistema de 32bit (Compilada para una arquitectura x86).
+## Como funciona inyeccion para un proceso x86
+La diferencia sucede por varios puntos clave:
+	- El shellcode que se inyecta es para una arquitectura x86
+	- Se busca inyectar al momento que carga ```SysWow64\ntdll.dll```
+	- Se inyecta una DLL compilada para arquitectura x86
 
-También pienso realizar una comprobación de DLL, es decir, que la DLL que se requiere inyectar sea la indicada, podria ser usando un cálculo de ```md5``` tomando en cuenta su integridad.
+¿Dónde sucede este proceso? Justamente en la rutina de carga de DLL, este detecta mediante código si carga una DLL en especifico:
+
+```c
+SET_UNICODE_STRING(path_filter, NTDLL_WOW64_PATH);
+
+if (IsSuffixedUnicodeString(ImageName, &path_filter, TRUE)) {
+	info->is32BitProcess = TRUE;
+	info->LdrLoadDllRoutineAddress = NULL;
+}
+```
+
+Una vez detectada la DLL, quiere decir que es un proceso de 32 bit, y con el miembro ```is32BitProcess``` de la estructura ```INJECT_INFO``` se declara como valor verdadero. 
+
+En la función de inyección en la sección de memoria (```InjectOnSection```), se utiliza una condicional para saber si el shellcode inyectado debe ser de 32bit. En este caso se declara de la siguiente manera:
+
+```C
+static NTSTATUS InjectOnSection(PINJECTION_INFO info, HANDLE SectionHandle, SIZE_T SectionSize){
+
+	NTSTATUS status;
+
+	PVOID SectionMemoryAddress = NULL;
+
+	SIZE_T functionLength = 0;
+
+	PUCHAR functionCode = NULL;
+
+	UNICODE_STRING DllToInject;
+
+	...
+
+	DllToInject = RTL_CONSTANT_STRING(DLL_PATH_NATIVE);
+	functionCode = FunctionX64;
+	functionLength = Functionx64_lenght;
+
+	if (info->is32BitProcess) {
+		DllToInject = RTL_CONSTANT_STRING(DLL_PATH_WOW64);
+		functionCode = FunctionX86;
+		functionLength = Functionx86_lenght;
+	}
+
+	...
+
+}
+```
+
+Cómo se puede observar, se pone una condición donde se utliza ```info->is32BitProcess``` aqui se asigna la longitud del código shellcode y el arreglo que contiene el shellcode.
 
 ## Agradecimientos y Referencias
 Todo esto ha sido posible gracias a diversos repositorios, cursos y páginas de Blog de diversos desarrolladores:
