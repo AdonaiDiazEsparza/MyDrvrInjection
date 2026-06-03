@@ -13,12 +13,12 @@
 #ifdef _WIN64
 #pragma comment(lib, "Detx64/detours.lib")
 #include "Detx64/detours.h"
-#define DLL_PATH "C:\\Windows\\System32\\MSXFS.dll"
+#define DLL_PATH "C:\\test\\hola.dll"
 #define CALL_API WINAPI 
 #else
 #pragma comment(lib, "Detx86/detours.lib")
 #include "Detx86/detours.h"
-#define DLL_PATH "C:\\Windows\\SysWOW64\\MSXFS.dll"
+#define DLL_PATH "C:\\testWOW\\hola.dll"
 #define CALL_API __cdecl
 #endif
 
